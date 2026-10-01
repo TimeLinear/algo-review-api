@@ -11,7 +11,8 @@ public enum ErrorCode {
     DAILY_LIMIT(HttpStatus.TOO_MANY_REQUESTS),
     UPSTREAM_TIMEOUT(HttpStatus.BAD_GATEWAY),
     UPSTREAM_ERROR(HttpStatus.BAD_GATEWAY),
-    INVALID_LLM_OUTPUT(HttpStatus.BAD_GATEWAY);
+    INVALID_LLM_OUTPUT(HttpStatus.BAD_GATEWAY),
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final HttpStatus status;
 

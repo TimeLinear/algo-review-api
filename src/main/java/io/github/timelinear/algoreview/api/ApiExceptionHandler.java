@@ -48,6 +48,13 @@ public class ApiExceptionHandler {
         return error(e.code(), e.getMessage());
     }
 
+    /** 예상 밖 예외(DB 접속 실패 등). 상세는 서버 로그에만 남기고 응답은 고정 문구(docs/decisions.md D-28). */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> onUnexpected(Exception e) {
+        log.error("unexpected error while handling request", e);
+        return error(ErrorCode.INTERNAL_ERROR, "internal server error");
+    }
+
     private static ResponseEntity<ErrorResponse> error(ErrorCode code, String message) {
         return ResponseEntity.status(code.status()).body(ErrorResponse.of(code, message));
     }
