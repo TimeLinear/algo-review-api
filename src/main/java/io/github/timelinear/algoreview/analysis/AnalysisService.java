@@ -2,20 +2,27 @@ package io.github.timelinear.algoreview.analysis;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import io.github.timelinear.algoreview.api.AnalyzeRequest;
+import io.github.timelinear.algoreview.cache.AnalysisCacheRepository;
 import io.github.timelinear.algoreview.config.LimitsProperties;
 import io.github.timelinear.algoreview.config.LlmProperties;
 import io.github.timelinear.algoreview.log.AnalysisLogEntry;
 import io.github.timelinear.algoreview.log.AnalysisLogEntry.Outcome;
 import io.github.timelinear.algoreview.log.AnalysisLogRepository;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
- * /analyze의 핵심 흐름: 요청 한도 검사 -> LLM 호출 -> 출력 검증(실패 시 1회 재요청) -> 로그 기록.
+ * /analyze의 핵심 흐름:
+ * 요청 한도 검사 -> 캐시 조회(적중이면 즉시 반환) -> 하루 호출 한도 -> LLM 호출 -> 출력 검증(실패 시 1회 재요청)
+ * -> 캐시 저장 -> 로그 기록.
  * 통신 수준 재시도는 {@link ReviewGenerator} 구현체 안에 있고, 여기서는 "내용이 쓸 만한가"만 다룬다.
  */
 @Service
@@ -26,18 +33,23 @@ public class AnalysisService {
     private final ReviewGenerator generator;
     private final AnalysisValidator validator;
     private final AnalysisLogRepository logRepository;
+    private final AnalysisCacheRepository cacheRepository;
     private final LimitsProperties limits;
     private final LlmProperties llm;
     private final Clock clock;
+    private final ObjectMapper mapper;
 
     public AnalysisService(ReviewGenerator generator, AnalysisValidator validator,
-            AnalysisLogRepository logRepository, LimitsProperties limits, LlmProperties llm, Clock clock) {
+            AnalysisLogRepository logRepository, AnalysisCacheRepository cacheRepository,
+            LimitsProperties limits, LlmProperties llm, Clock clock, ObjectMapper mapper) {
         this.generator = generator;
         this.validator = validator;
         this.logRepository = logRepository;
+        this.cacheRepository = cacheRepository;
         this.limits = limits;
         this.llm = llm;
         this.clock = clock;
+        this.mapper = mapper;
     }
 
     public Analysis analyze(AnalyzeRequest request) {
@@ -52,26 +64,55 @@ public class AnalysisService {
         Instant requestedAt = clock.instant();
         long startNanos = System.nanoTime();
 
-        // 호출마다 누적되는 값. 실패해도 쓴 토큰은 기록한다.
+        // 1. 캐시
+        Optional<AnalysisCacheRepository.Cached> cached = cacheRepository.find(codeHash);
+        if (cached.isPresent()) {
+            Analysis analysis = parseCached(cached.get());
+            if (analysis != null) {
+                record(requestedAt, input, codeHash, Outcome.CACHE_HIT, null, 0, startNanos,
+                        null, null, cached.get().model(), cached.get().promptVersion());
+                return analysis;
+            }
+            log.warn("cached analysis_json unreadable, falling through to LLM: code_hash={}", codeHash);
+        }
+
+        // 2. 하루 LLM 호출 한도 (analysis_log 집계. 캐시 적중은 세지 않는다)
+        Instant dayStart = LocalDate.now(clock.withZone(limits.dailyResetZone()))
+                .atStartOfDay(limits.dailyResetZone()).toInstant();
+        long todayCalls = logRepository.countLlmCallsSince(dayStart);
+        if (todayCalls >= limits.dailyLlmCalls()) {
+            record(requestedAt, input, codeHash, Outcome.REJECTED_LIMIT, ErrorCode.DAILY_LIMIT.name(), 0,
+                    startNanos, null, null, null, null);
+            throw new AnalysisException.DailyLimit(
+                    "daily LLM call limit reached (" + todayCalls + "/" + limits.dailyLlmCalls() + ")");
+        }
+
+        // 3. LLM 호출 + 출력 검증. 호출마다 누적되는 값은 실패해도 기록한다.
         int attempts = 0;
         int inputTokens = 0;
         int outputTokens = 0;
         String model = null;
-
         try {
             String lastProblem = null;
             int maxCalls = 1 + llm.outputValidationRetries();
             for (int call = 1; call <= maxCalls; call++) {
-                attempts++;
-                ReviewResult result = generator.generate(input);
+                ReviewResult result;
+                try {
+                    result = generator.generate(input);
+                } catch (AnalysisException.Upstream e) {
+                    attempts += e.attempts();
+                    throw e;
+                }
+                attempts += result.attempts();
                 inputTokens += result.inputTokens();
                 outputTokens += result.outputTokens();
                 model = result.model();
 
                 AnalysisValidator.Outcome outcome = validator.validate(result);
                 if (outcome.valid()) {
+                    saveToCache(codeHash, outcome.analysis(), model);
                     record(requestedAt, input, codeHash, Outcome.SUCCESS, null, attempts, startNanos,
-                            inputTokens, outputTokens, model);
+                            inputTokens, outputTokens, model, llm.promptVersion());
                     return outcome.analysis();
                 }
                 lastProblem = outcome.problem();
@@ -80,20 +121,35 @@ public class AnalysisService {
             throw new AnalysisException.InvalidLlmOutput("LLM output failed validation: " + lastProblem);
         } catch (AnalysisException e) {
             record(requestedAt, input, codeHash, Outcome.FAILED, e.code().name(), attempts, startNanos,
-                    inputTokens, outputTokens, model);
+                    inputTokens, outputTokens, model, llm.promptVersion());
             throw e;
         }
     }
 
+    private Analysis parseCached(AnalysisCacheRepository.Cached cached) {
+        try {
+            return mapper.readValue(cached.analysisJson(), Analysis.class);
+        } catch (JacksonException e) {
+            return null;
+        }
+    }
+
+    private void saveToCache(String codeHash, Analysis analysis, String model) {
+        try {
+            cacheRepository.save(codeHash, mapper.writeValueAsString(analysis), model, llm.promptVersion());
+        } catch (RuntimeException e) {
+            // 캐시 저장 실패는 응답을 막지 않는다.
+            log.error("analysis_cache save failed: code_hash={}", codeHash, e);
+        }
+    }
+
     private void record(Instant requestedAt, ReviewInput input, String codeHash, Outcome outcome,
-            String errorCode, int attempts, long startNanos, int inputTokens, int outputTokens, String model) {
+            String errorCode, int attempts, long startNanos, Integer inputTokens, Integer outputTokens,
+            String model, String promptVersion) {
         long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
-        boolean called = attempts > 0;
         AnalysisLogEntry entry = new AnalysisLogEntry(
                 requestedAt, input.platform(), input.problemId(), input.language(), codeHash,
-                outcome, errorCode, attempts, latencyMs,
-                called ? inputTokens : null, called ? outputTokens : null,
-                model, called ? llm.promptVersion() : null);
+                outcome, errorCode, attempts, latencyMs, inputTokens, outputTokens, model, promptVersion);
         try {
             logRepository.insert(entry);
         } catch (RuntimeException e) {
