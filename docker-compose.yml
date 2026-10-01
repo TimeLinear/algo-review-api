@@ -1,0 +1,21 @@
+# 로컬 개발용 Postgres. 메이저 버전은 Supabase 프로젝트와 맞춘다(docs/decisions.md D-08).
+services:
+  postgres:
+    image: postgres:17
+    container_name: algo-review-postgres
+    environment:
+      POSTGRES_DB: algo_review
+      POSTGRES_USER: algo
+      POSTGRES_PASSWORD: algo
+    ports:
+      - "5432:5432"
+    volumes:
+      - algo-review-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U algo -d algo_review"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  algo-review-pgdata:
