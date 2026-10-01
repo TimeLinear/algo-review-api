@@ -1,15 +1,17 @@
 package io.github.timelinear.algoreview.llm;
 
 import java.io.IOException;
-import java.net.http.HttpTimeoutException;
 import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
@@ -28,7 +30,9 @@ import tools.jackson.databind.ObjectMapper;
  * Anthropic Messages API(https://api.anthropic.com/v1/messages)를 RestClient로 직접 호출한다.
  * SDK를 쓰지 않는 이유: 타임아웃, 재시도, 토큰 기록을 코드로 드러내기 위함(docs/decisions.md D-09).
  *
- * 단계 1: 1회 호출, 타임아웃 분류, stop_reason/usage 추출. HTTP 재시도는 단계 2에서 붙인다.
+ * 재시도 규칙(운영 한도 표): 최초 1회 + 최대 N회. 대상은 설정의 상태 코드(429/500/502/503/504/529),
+ * 타임아웃, 연결 오류. 그 외 4xx(400/401/403 등)는 즉시 실패. 대기는 1초, 2초이되
+ * retry-after 헤더가 있으면 그 값(상한 있음)을 쓴다.
  */
 @Component
 public class AnthropicReviewGenerator implements ReviewGenerator {
@@ -37,23 +41,76 @@ public class AnthropicReviewGenerator implements ReviewGenerator {
     static final String MESSAGES_PATH = "/v1/messages";
     static final String API_VERSION = "2023-06-01";
 
+    /** 재시도 대기. 테스트에서 실제로 잠들지 않도록 바꿔 끼운다. */
+    @FunctionalInterface
+    public interface Sleeper {
+        void sleep(Duration d) throws InterruptedException;
+
+        Sleeper REAL = d -> Thread.sleep(d.toMillis());
+    }
+
     private final RestClient client;
     private final LlmProperties props;
     private final PromptBuilder prompts;
     private final ObjectMapper mapper;
+    private final Sleeper sleeper;
 
+    @Autowired
     public AnthropicReviewGenerator(RestClient anthropicRestClient, LlmProperties props,
             PromptBuilder prompts, ObjectMapper mapper) {
-        this.client = anthropicRestClient;
+        this(anthropicRestClient, props, prompts, mapper, Sleeper.REAL);
+    }
+
+    AnthropicReviewGenerator(RestClient client, LlmProperties props, PromptBuilder prompts,
+            ObjectMapper mapper, Sleeper sleeper) {
+        this.client = client;
         this.props = props;
         this.prompts = prompts;
         this.mapper = mapper;
+        this.sleeper = sleeper;
     }
 
     @Override
     public ReviewResult generate(ReviewInput input) {
         Map<String, Object> body = requestBody(input);
-        return callOnce(body);
+        int maxAttempts = 1 + props.retry().maxRetries();
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return callOnce(body).withAttempts(attempt);
+            } catch (AnalysisException.Upstream e) {
+                if (attempt >= maxAttempts || !isRetryable(e)) {
+                    throw e.withAttempts(attempt);
+                }
+                Duration wait = backoff(attempt, e);
+                log.warn("Anthropic call attempt {}/{} failed ({}), retrying in {}", attempt, maxAttempts,
+                        e.getMessage(), wait);
+                try {
+                    sleeper.sleep(wait);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e.withAttempts(attempt);
+                }
+            }
+        }
+    }
+
+    boolean isRetryable(AnalysisException.Upstream e) {
+        if (e instanceof AnalysisException.UpstreamTimeout) {
+            return true;
+        }
+        int status = ((AnalysisException.UpstreamError) e).httpStatus();
+        return status == 0 || props.retry().retryableStatuses().contains(status);
+    }
+
+    /** attempt번째 실패 뒤의 대기. retry-after가 있으면 그 값(상한 적용), 없으면 설정의 n번째 대기. */
+    Duration backoff(int attempt, AnalysisException.Upstream e) {
+        LlmProperties.Retry retry = props.retry();
+        if (e instanceof AnalysisException.UpstreamError ue && ue.retryAfterSeconds() != null) {
+            Duration fromHeader = Duration.ofSeconds(Math.max(0, ue.retryAfterSeconds()));
+            return fromHeader.compareTo(retry.maxRetryAfter()) > 0 ? retry.maxRetryAfter() : fromHeader;
+        }
+        List<Duration> backoffs = retry.backoffs();
+        return backoffs.get(Math.min(attempt, backoffs.size()) - 1);
     }
 
     Map<String, Object> requestBody(ReviewInput input) {
@@ -137,7 +194,7 @@ public class AnthropicReviewGenerator implements ReviewGenerator {
     }
 
     /** JDK HttpClient 예외를 타임아웃/연결 오류로 나눈다. */
-    static AnalysisException classify(ResourceAccessException e) {
+    static AnalysisException.Upstream classify(ResourceAccessException e) {
         Throwable t = e;
         while (t != null) {
             if (t instanceof HttpTimeoutException || t instanceof SocketTimeoutException) {
