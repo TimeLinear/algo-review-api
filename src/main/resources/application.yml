@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: algo-review-api
+  # 로컬 개발 편의: 작업 폴더의 .env(KEY=value)를 properties 형식으로 읽는다. 파일이 없으면 무시.
+  config:
+    import: "optional:file:.env[.properties]"
+  datasource:
+    # 운영(Render)에서는 환경변수로만 받는다. 기본값은 docker-compose.yml의 로컬 Postgres.
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/algo_review}
+    username: ${DATABASE_USERNAME:algo}
+    password: ${DATABASE_PASSWORD:algo}
+  flyway:
+    enabled: true
+  threads:
+    virtual:
+      enabled: false   # MVP에서는 가상 스레드를 켜지 않는다 (docs/decisions.md D-01)
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+# ---- 운영 한도 (README "운영 한도" 표와 같은 값. ConfigDocConsistencyTest가 검사한다) ----
+limits:
+  code-max-length: 50000          # 자. 초과 시 400
+  daily-llm-calls: 200            # 하루 LLM 호출 한도 (캐시 적중은 세지 않음)
+  daily-reset-zone: Asia/Seoul    # 자정 초기화 기준 시간대
+
+llm:
+  base-url: https://api.anthropic.com
+  api-key: ${ANTHROPIC_API_KEY:}
+  model: claude-sonnet-5-5
+  prompt-version: v1
+  max-tokens: 4096
+  connect-timeout: 5s
+  read-timeout: 90s
+  retry:
+    max-retries: 2                # 최초 1회 + 최대 2회
+    backoffs: 1s,2s               # 재시도 대기
+    max-retry-after: 10s          # retry-after 헤더 상한
+    retryable-statuses: 429,500,502,503,504,529
+  output-validation-retries: 1    # 출력 검증 실패 시 재요청 횟수
+
+client:
+  api-key: ${CLIENT_API_KEY:}

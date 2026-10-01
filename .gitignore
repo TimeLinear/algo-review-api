@@ -1,0 +1,22 @@
+# 비밀값
+.env
+
+# 에이전트 지시문 (레포에 올릴지는 나중에 결정)
+algo-review-api-instructions.md
+
+# Gradle / 빌드 산출물
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+.vscode/
+.settings
+.classpath
+.project
+bin/
