@@ -1,0 +1,15 @@
+{
+  "platform": "swea",
+  "meta_info": {
+    "title": "서로소 집합",
+    "problem_id": "3289",
+    "link": "https://swexpertacademy.com/main/code/problem/problemDetail.do?contestProbId=3289",
+    "level": "D4",
+    "language": "java"
+  },
+  "submission_info": {
+    "code": "import java.io.BufferedReader;\nimport java.io.IOException;\nimport java.io.InputStreamReader;\nimport java.io.StreamTokenizer;\n\nclass Solution\n{\n\tstatic StreamTokenizer in;\n\tstatic int N, M;\n\tstatic int[] p, rank;\n\n\tpublic static void main(String[] args) throws IOException {\n\t\tin = new StreamTokenizer(new BufferedReader(new InputStreamReader(System.in)));\n\t\tStringBuilder sb = new StringBuilder();\n\n\t\tint T = nextInt();\n\t\t\n\t\tfor(int tc = 1; tc <= T; tc++) {\n\t\t\tN = nextInt();\n\t\t\tM = nextInt();\n\t\t\t\n\t\t\tp = new int[N + 1];\n\t\t\trank = new int[N + 1];\n\t\t\t\n\t\t\tfor(int i = 1; i <= N; i++) {\n\t\t\t\tp[i] = i;\n\t\t\t\trank[i] = 0;\n\t\t\t}\n\t\t\t\n\t\t\tsb.append('#').append(tc).append(' ');\n\t\t\t\n\t\t\tfor(int i = 0; i < M; i++) {\n\t\t\t\tint cmd = nextInt();\n\t\t\t\tint s1 = nextInt();\n\t\t\t\tint s2 = nextInt();\n\t\t\t\tif (cmd == 0) union(s1, s2);\n\t\t\t\telse {\n\t\t\t\t\tboolean isUnion = find(s1) == find(s2);\n\t\t\t\t\tsb.append(isUnion ? 1 : 0);\n\t\t\t\t}\n\t\t\t}\n\t\t\tsb.append('\\n');\n\t\t}\n\t\tSystem.out.print(sb);\n\t}\n\n\tstatic int find(int x) {\n\t\tif (p[x] == x) return x;\n\t\treturn p[x] = find(p[x]);\n\t}\n\t\n\tstatic void union(int s1, int s2) {\n\t\tint r1 = find(s1);\n\t\tint r2 = find(s2);\n\t\tif (r1 == r2) return;\n\t\tif (rank[r1] > rank[r2]) p[r2] = r1;\n\t\telse {\n\t\t\tp[r1] = r2;\n\t\t\tif (rank[r1] == rank[r2]) rank[r2]++;\n\t\t}\n\t}\n\t\n\tstatic int nextInt() throws IOException {\n\t\tin.nextToken();\n\t\treturn (int) in.nval;\n\t}\n}",
+    "memory": null,
+    "time": null
+  }
+}

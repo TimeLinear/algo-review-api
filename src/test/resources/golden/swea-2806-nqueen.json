@@ -1,0 +1,15 @@
+{
+  "platform": "swea",
+  "meta_info": {
+    "title": "N-Queen",
+    "problem_id": "2806",
+    "link": "https://swexpertacademy.com/main/code/problem/problemDetail.do?contestProbId=2806",
+    "level": "D3",
+    "language": "java"
+  },
+  "submission_info": {
+    "code": "import java.io.BufferedReader;\nimport java.io.IOException;\nimport java.io.InputStreamReader;\n\nclass Solution\n{\n\tstatic int N, cnt, FULL;\n\n\tpublic static void main(String[] args) throws IOException {\n\t\tBufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n\t\tStringBuilder sb = new StringBuilder();\n\t\t\n\t\tint T = Integer.parseInt(br.readLine());;\n\t\t\n\t\tfor(int tc = 1; tc <= T; tc++) {\n\t\t\tN = Integer.parseInt(br.readLine());\n\t\t\tFULL = (1 << N) - 1;\n            cnt = 0;\n\t\t\t\n\t\t\tsetQueen(0, 0, 0, 0);\n\t\t\tsb.append('#').append(tc).append(' ').append(cnt).append('\\n');\n\t\t}\n\t\tSystem.out.print(sb);\n\t}\n\n\tstatic void setQueen(int row, int col, int main, int sub) {\n\n\t\tif (row == N) {\n\t\t\t++cnt;\n\t\t\treturn;\n\t\t}\n\n\t\tint available = FULL & ~(col | main | sub);\n\t\t\n\t\twhile(available != 0) {\n\t\t\tint bit = available & (-available);\n\t\t\tavailable -= bit;\n\t\t\t\n\t\t\tsetQueen(row + 1, col | bit, (main | bit) << 1, (sub | bit) >> 1);\n\t\t}\n\t}\n}",
+    "memory": null,
+    "time": null
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "platform": "jungol",
+  "meta_info": {
+    "title": "요세푸스 문제 1",
+    "problem_id": "3101",
+    "link": "https://jungol.co.kr/problem/3101",
+    "level": "Silver I",
+    "language": "java"
+  },
+  "submission_info": {
+    "code": "import java.io.BufferedReader;\nimport java.io.IOException;\nimport java.io.InputStreamReader;\nimport java.io.StreamTokenizer;\n\npublic class Main {\n\tstatic int N, K;\n\tstatic int[] q;\n\tstatic int head, tail;\n\t\n\tpublic static void main(String[] args) throws IOException {\n\t\tStreamTokenizer in = new StreamTokenizer(new BufferedReader(new InputStreamReader(System.in)));\n\t\tStringBuilder sb = new StringBuilder();\n\t\t\n\t\tin.nextToken();\n\t\tN = (int) in.nval;\n\t\t\n\t\tin.nextToken();\n\t\tK = (int) in.nval;\n\t\t\n\t\t// 최악의 케이스가 N * 3이라고 함\n\t\tq = new int[N * 3];\n\t\tfor (int i = 0;  i < N; i++) q[i] = i;\n\t\t\n\t\thead = 0;\n\t\ttail = N;\n\t\t\n\t\tint remains = N;\n\t\twhile (remains > 0) {\n\t\t\tint step = (K - 1) % remains;\n\t\t\t\n\t\t\tfor (int i = 0; i < step; i++) {\n\t\t\t\tint val = q[head++];\n\t\t\t\tq[tail++] = val;\n\t\t\t}\n\t\t\tsb.append(q[head] + 1).append(' ');\n\t\t\thead++;\n\t\t\tremains--;\n\t\t\t\n\t\t\tif (head >= N) {\n\t\t\t\tint size = tail - head;\n\t\t\t\tSystem.arraycopy(q, head, q, 0, size);\n\t\t\t\thead = 0;\n\t\t\t\ttail = size;\n\t\t\t}\n\t\t}\n\t\t\n\t\tSystem.out.print(sb);\n\t}\n}",
+    "memory": 35564,
+    "time": 299
+  }
+}

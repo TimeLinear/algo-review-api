@@ -1,0 +1,15 @@
+{
+  "platform": "swea",
+  "meta_info": {
+    "title": "[S/W 문제해결 기본] 7일차 - 미로1",
+    "problem_id": "1226",
+    "link": "https://swexpertacademy.com/main/code/problem/problemDetail.do?contestProbId=1226",
+    "level": "D4",
+    "language": "java"
+  },
+  "submission_info": {
+    "code": "import java.io.BufferedReader;\nimport java.io.IOException;\nimport java.io.InputStreamReader;\n\nclass Solution\n{\n\tstatic final int SIZE = 16;\n\tstatic final int[] DY = {-1, 1, 0, 0};\n\tstatic final int[] DX = {0, 0, -1, 1};\n\t\n\tstatic boolean[][] map = new boolean[SIZE][SIZE];\n\tstatic int[] q = new int[SIZE * SIZE];\n\tstatic int head, tail;\n\tstatic int startY, startX, destY, destX; // y, x\n\tstatic int result;\n\n\tpublic static void main(String[] args) throws IOException {\n\t\tBufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n\t\tStringBuilder sb = new StringBuilder();\n\t\t\n\t\tfor(int tc = 1; tc <= 10; tc++) {\n\t\t\t// 불필요한 테스트케이스 번호 입력 처리\n\t\t\tsb.append('#').append(br.readLine().trim()).append(' ');\n\t\t\t\n\t\t\thead = 0;\n\t\t\ttail = 0;\n\t\t\t\n\t\t\tresult = 0;\n\t\t\t\n\t\t\tfor(int i = 0; i < SIZE; i++) {\n\t\t\t\tString line = br.readLine();\n\t\t\t\tfor(int j = 0; j < SIZE; j++) {\n\t\t\t\t\tchar cell = line.charAt(j);\n\t\t\t\t\tif (cell == '2') {\n\t\t\t\t\t\tstartY = i;\n\t\t\t\t\t\tstartX = j;\n\t\t\t\t\t} else if (cell == '3') {\n\t\t\t\t\t\tdestY = i;\n\t\t\t\t\t\tdestX = j;\n\t\t\t\t\t}\n\t\t\t\t\t// map의 true는 길, false는 그 외\n\t\t\t\t\tmap[i][j] = cell != '1';\n\t\t\t\t}\n\t\t\t}\n\t\t\t\n\t\t\tq[tail++] = startY * SIZE + startX;\n\t\t\tmap[startY][startX] = false;\n\t\t\t\n\t\t\touter:\n\t\t\twhile(head != tail) {\n\t\t\t\tint cur = q[head++];\n\t\t\t\tint curY = cur / SIZE; // cur은 16 * y + x. 이 때 x는 16 미만\n\t\t\t\tint curX = cur % SIZE;\n\t\t\t\t\n\t\t\t\tint ny, nx;\n\t\t\t\tfor(int d = 0; d < DY.length; d++) {\n\t\t\t\t\tny = curY + DY[d];\n\t\t\t\t\tnx = curX + DX[d];\n\t\t\t\t\t\n\t\t\t\t\tif(ny >= SIZE - 1 || ny < 1 || nx >= SIZE + 1 || nx < 1 || !map[ny][nx])\n\t\t\t\t\t\tcontinue;\n\t\t\t\t\t\n\t\t\t\t\tif (ny == destY && nx == destX) {\n\t\t\t\t\t\tresult = 1;\n\t\t\t\t\t\tbreak outer;\n\t\t\t\t\t}\n\t\t\t\t\t\n\t\t\t\t\tq[tail++] = ny * SIZE + nx;\n\t\t\t\t\tmap[ny][nx] = false;\n\t\t\t\t}\n\t\t\t}\n\t\t\tsb.append(result).append(System.lineSeparator());\n\t\t}\n\t\tSystem.out.print(sb);\n\t}\n}",
+    "memory": null,
+    "time": null
+  }
+}

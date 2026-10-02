@@ -1,0 +1,15 @@
+{
+  "platform": "jungol",
+  "meta_info": {
+    "title": "피보나치",
+    "problem_id": "1053",
+    "link": "https://jungol.co.kr/problem/1053",
+    "level": "Gold II",
+    "language": "java"
+  },
+  "submission_info": {
+    "code": "import java.io.BufferedReader;\n\nimport java.io.IOException;\n\nimport java.io.InputStreamReader;\n\nimport java.io.StreamTokenizer;\n\n\n\npublic class Main {\n\n    static final int MOD = 10000;\n\n\t\n\n\tpublic static void main(String[] args) throws IOException {\n\n\t\tStreamTokenizer in = new StreamTokenizer(new BufferedReader(new InputStreamReader(System.in)));\n\n\t\tStringBuilder sb = new StringBuilder();\n\n\t\t\n\n\t\twhile(true) {\n\n\t\t\tin.nextToken();\n\n\t\t\tint N = (int) in.nval;\n\n\t\t\tif (N == -1) break;\n\n\t\t\t\n\n\t\t\tsb.append(fiboMod(N)).append('\\n');\n\n\t\t}\n\n\t\tSystem.out.println(sb);\n\n\t}\n\n\t\n\n\tstatic long[][] matpow(long[][] M, int n) {\n\n\t\tlong[][] result = {{1, 0}, {0, 1}};\n\n\t\tlong[][] base = {{M[0][0], M[0][1]}, {M[1][0], M[1][1]}};\n\n\t\t\n\n\t\t// 13 = 1101 (2진수) = 8 + 4 + 1\n\n\t\t// 행렬 M의 13제곱 = 행렬 M의 8제곱 * 행렬 M의 4제곱 * 행렬 M의 1제곱\n\n\t\twhile(n > 0) {\n\n\t\t\tif ((n & 1) == 1) {\n\n\t\t\t\tresult = matMulti(result, base);\n\n\t\t\t}\n\n\t\t\tbase = matMulti(base, base);\n\n\t\t\tn >>= 1;\n\n\t\t}\n\n\t\t\n\n\t\treturn result;\n\n\t}\n\n\t\n\n\tstatic long[][] matMulti(long[][] A, long[][] B) {\n\n\t\tlong[][] C = new long[2][2];\n\n\t\tfor(int i = 0; i < 2; i++) {\n\n\t\t\tfor(int j = 0; j < 2; j++) {\n\n\t\t\t\tlong sum = 0;\n\n\t\t\t\tfor(int k = 0; k < 2; k++) {\n\n\t\t\t\t\tsum += A[i][k] * B[k][j];\n\n\t\t\t\t}\n\n\t\t\t\t// 오버 플로우 방지\n\n\t\t\t\tC[i][j] = sum % MOD;\n\n\t\t\t}\n\n\t\t}\n\n\t\treturn C;\n\n\t}\n\n\t\n\n\tstatic long fiboMod(int n) {\n\n\t\tlong[][] M = {{1, 1}, {1, 0}};\n\n\t\tlong[][] result = matpow(M, n);\n\n\t\treturn result[0][1];\n\n\t}\n\n}",
+    "memory": 34328,
+    "time": 122
+  }
+}
