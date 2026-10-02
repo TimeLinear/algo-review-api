@@ -80,10 +80,27 @@ public class AnalysisException extends RuntimeException {
         }
     }
 
-    /** LLM 응답을 받았지만 쓸 수 없는 내용(502). 재요청 후에도 실패했을 때 던진다. */
+    /**
+     * LLM 응답을 받았지만 쓸 수 없는 내용(502). 재요청 후에도 실패했을 때, 또는 거절(refusal)이면 즉시 던진다.
+     * analysis_log의 error_code에는 {@link #logCode()}를 적어 거절을 다른 검증 실패와 구분한다(docs/decisions.md D-37).
+     */
     public static class InvalidLlmOutput extends AnalysisException {
+        /** 모델이 안전 분류기로 요청을 거절했을 때 error_code에 적는 값. API 응답 코드는 그대로 INVALID_LLM_OUTPUT. */
+        public static final String LOG_CODE_REFUSAL = "LLM_REFUSAL";
+
+        private final String logCode;
+
         public InvalidLlmOutput(String message) {
+            this(message, ErrorCode.INVALID_LLM_OUTPUT.name());
+        }
+
+        public InvalidLlmOutput(String message, String logCode) {
             super(ErrorCode.INVALID_LLM_OUTPUT, message);
+            this.logCode = logCode;
+        }
+
+        public String logCode() {
+            return logCode;
         }
     }
 }

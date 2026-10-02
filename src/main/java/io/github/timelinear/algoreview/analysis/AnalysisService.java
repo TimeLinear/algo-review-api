@@ -24,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
  * 요청 한도 검사 -> 캐시 조회(적중이면 즉시 반환) -> 하루 호출 한도 -> LLM 호출 -> 출력 검증(실패 시 1회 재요청)
  * -> 캐시 저장 -> 로그 기록.
  * 통신 수준 재시도는 {@link ReviewGenerator} 구현체 안에 있고, 여기서는 "내용이 쓸 만한가"만 다룬다.
+ * stop_reason=refusal은 재요청 없이 즉시 실패한다(error_code=LLM_REFUSAL).
  */
 @Service
 public class AnalysisService {
@@ -108,6 +109,13 @@ public class AnalysisService {
                 outputTokens += result.outputTokens();
                 model = result.model();
 
+                if (result.isRefusal()) {
+                    // 거절은 재요청해도 반복될 가능성이 높고 일부 범주는 과금되므로 즉시 실패(D-37).
+                    log.warn("LLM refused the request (call {}/{}), not retrying", call, maxCalls);
+                    throw new AnalysisException.InvalidLlmOutput("LLM refused the request (stop_reason=refusal)",
+                            AnalysisException.InvalidLlmOutput.LOG_CODE_REFUSAL);
+                }
+
                 AnalysisValidator.Outcome outcome = validator.validate(result);
                 if (outcome.valid()) {
                     saveToCache(codeHash, outcome.analysis(), model);
@@ -120,7 +128,8 @@ public class AnalysisService {
             }
             throw new AnalysisException.InvalidLlmOutput("LLM output failed validation: " + lastProblem);
         } catch (AnalysisException e) {
-            record(requestedAt, input, codeHash, Outcome.FAILED, e.code().name(), attempts, startNanos,
+            String logCode = e instanceof AnalysisException.InvalidLlmOutput io ? io.logCode() : e.code().name();
+            record(requestedAt, input, codeHash, Outcome.FAILED, logCode, attempts, startNanos,
                     inputTokens, outputTokens, model, llm.promptVersion());
             throw e;
         }

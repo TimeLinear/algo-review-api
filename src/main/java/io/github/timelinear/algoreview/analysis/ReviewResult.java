@@ -26,6 +26,11 @@ public record ReviewResult(
         return "end_turn".equals(stopReason);
     }
 
+    /** 안전 분류기가 요청을 거절한 응답(HTTP 200, stop_reason=refusal). 재요청해도 같은 결과일 가능성이 높다. */
+    public boolean isRefusal() {
+        return "refusal".equals(stopReason);
+    }
+
     public ReviewResult withAttempts(int attempts) {
         return new ReviewResult(text, stopReason, model, inputTokens, outputTokens, attempts);
     }
