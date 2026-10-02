@@ -1,0 +1,22 @@
+# Render Blueprint: Docker 웹 서비스만 정의한다. DB는 Supabase(외부)라 여기서 만들지 않는다(docs/decisions.md D-06).
+# 비밀값은 sync: false 로 두어 Render 대시보드에서 직접 입력한다. 값은 이 파일에 넣지 않는다.
+services:
+  - type: web
+    name: algo-review-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLIENT_API_KEY
+        sync: false
+      - key: DATABASE_URL          # jdbc:postgresql://aws-x-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+        sync: false
+      - key: DATABASE_USERNAME     # postgres.<project-ref>
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false

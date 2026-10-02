@@ -1,0 +1,9 @@
+.git
+.gradle
+build
+.env
+.idea
+*.iml
+docs
+README.md
+algo-review-api-instructions.md
