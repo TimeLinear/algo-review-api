@@ -59,16 +59,21 @@ D-07의 `sslmode=require`는 pgjdbc에서 암호화만 하고 서버 인증서�
 
 | ID | 작업 | 상태 | 변경 |
 | --- | --- | --- | --- |
-| A1 | 실행 이미지 cacerts에서 emSign 루트·AAA 제거 + 가드 | 적용(로컬 커밋) | `Dockerfile`, D-46 |
-| A3 | 빌드 이미지에도 A1 적용 | 적용(로컬 커밋) | `Dockerfile`, D-46 |
-| A5 | Gradle 배포본 SHA-256 고정 | 적용(로컬 커밋) | `gradle/wrapper/gradle-wrapper.properties`, D-47 |
+| A1 | 실행 이미지 cacerts에서 emSign 루트·AAA 제거 + 가드 | 적용, 로컬 Docker 검증 완료 | `Dockerfile`, D-46 |
+| A3 | 빌드 이미지에도 A1 적용 | 적용, 로컬 Docker 검증 완료 | `Dockerfile`, D-46 |
+| A5 | Gradle 배포본 SHA-256 고정 | 적용, 로컬 Docker 검증 완료 | `gradle/wrapper/gradle-wrapper.properties`, D-47 |
 | A2 | DB 연결을 `verify-full`로 전환 | 대기: 사용자 작업 필요 | 인증서 파일, `Dockerfile`, `render.yaml`, `README.md`, D-07 |
 | A4 | Git for Windows 업데이트 | 근거 미확인, 정기 업데이트로 처리 | 없음 |
 
 ### A1·A3 검증
 
 - Dockerfile의 두 `RUN` 블록을 그대로 뽑아 dash로 실행(`-cacerts`만 테스트용 키스토어로 대체): 21.0.12.1 cacerts는 118개 → 114개, 21.0.13 cacerts는 118개 → 117개, 두 경우 모두 emSign·AAA 0개. 키스토어를 읽지 못하면 종료 코드 1로 빌드가 멈춘다.
-- 실제 이미지 빌드는 이 환경에 Docker가 없어 Render 배포 빌드에서 확인한다. 배포 후 확인할 것: 빌드 로그에서 두 `RUN` 단계 성공, `/actuator/health` UP, `/analyze` 호출이 TLS 오류 없이 성공.
+- 로컬 Docker 검증(2026-10-27, `docker build --pull --no-cache`, 베이스 `21-jre@sha256:1aaab293…`, `21-jdk@sha256:1eebb031…` = Temurin 21.0.12.1+1):
+  - 두 `RUN` 블록 모두 성공, 빌드·실행 이미지 모두 cacerts 114개, emSign·AAA 0개.
+  - Gradle 래퍼가 체크섬을 고정한 상태로 배포본을 받고 `bootJar` 성공(A5 동작 확인).
+  - 패치된 실행 이미지 + 로컬 Postgres로 기동, Flyway 적용, `/actuator/health` UP.
+  - 가짜 API 키로 `/analyze` 호출 → 로그 `Anthropic API HTTP 401 type=authentication_error`. TLS 연결은 성공하고 인증만 거절됐다(인증서 오류였다면 `unreachable`/PKIX가 찍힘).
+- 배포 후 확인할 것: Render 빌드 로그에서 두 `RUN` 단계 성공, `/actuator/health` UP.
 - 해제 조건: 베이스 이미지 cacerts에 `emSign ECC Root CA - G3`와 `AAA Certificate Services`가 모두 없을 것. 블록은 결과가 늘 같으므로 해제 후에도 가드로 남겨도 된다.
 
 ### A5 검증
